@@ -106,10 +106,13 @@ export function attachmentLine(attachment: TaigaAttachment): string {
 }
 
 export function details(pairs: [string, string | number | null | undefined][]): string {
-  return pairs
-    .filter(([, value]) => value !== undefined && value !== null && value !== '' && value !== NONE)
-    .map(([key, value]) => `${key}: ${value}`)
-    .join('\n');
+  const lines: string[] = [];
+  for (const [key, value] of pairs) {
+    if (value !== undefined && value !== null && value !== '' && value !== NONE) {
+      lines.push(`${key}: ${value}`);
+    }
+  }
+  return lines.join('\n');
 }
 
 export function listing(what: string, rows: string[], total?: number): string {

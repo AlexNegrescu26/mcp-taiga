@@ -13,6 +13,7 @@ All notable changes to this project are documented in this file. The format is b
 - Added modern stdio and HTTP protocol negotiation coverage, including schema validation failures.
 - Replaced Axios with native fetch while preserving authentication, bounded retries, timeouts, FormData uploads, and bounded attachment downloads.
 - Raised the runtime baseline to Node.js 24 LTS, replaced dotenv with Node's built-in environment loader, and refreshed all direct dependencies.
+- Synced the focused `no-array-filter-map` and `no-reduce-accumulator-copy` anti-slop rules from upstream while retaining the local no-comments policy.
 
 ## [1.0.0] - 2026-08-24
 
