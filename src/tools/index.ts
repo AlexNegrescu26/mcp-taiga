@@ -10,8 +10,7 @@
  *
  * Handlers may throw; `guard` converts a throw into an MCP tool error so the model can self-correct.
  */
-
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import type { RegisteredTool } from '../types.js';
 import { tools as projects } from './projects.js';
 import { tools as work } from './work.js';

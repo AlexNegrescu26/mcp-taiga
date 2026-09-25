@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import axios from 'axios';
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
+import { z } from 'zod';
 import { allTools } from '../src/tools/index.js';
 import { ITEM_TYPES, findIdByName, isNumericId, itemType, patchItem } from '../src/taiga.js';
 import {
@@ -442,12 +443,16 @@ test('tool-definition invariants: 6 tools, required op, described properties, no
     assert.ok((tool.description?.length ?? 0) > 20, `${tool.name} description too thin`);
     assert.equal(tool.register.constructor, Function, `${tool.name} missing register`);
     assert.equal(tool.annotations.constructor, Object, `${tool.name} missing annotations`);
-    assert.equal(tool.inputSchema.constructor, Object, `${tool.name} missing inputSchema`);
-    assert.ok(tool.inputSchema.op, `${tool.name} missing 'op' in inputSchema`);
+    assert.equal(tool.inputSchema instanceof z.ZodObject, true, `${tool.name} missing Standard Schema object`);
+    const jsonSchema = z.toJSONSchema(tool.inputSchema);
+    assert.equal(jsonSchema.type, 'object', `${tool.name} input schema is not an object`);
+    assert.ok(jsonSchema.required?.includes('op'), `${tool.name} must require 'op'`);
     // SAFETY: checking runtime absence of outputSchema property on tool definition
-    assert.equal((tool as { outputSchema?: JsonValue }).outputSchema, undefined, `${tool.name} must not declare outputSchema`);
-    for (const [field, schema] of Object.entries(tool.inputSchema)) {
-      assert.ok(schema?.description, `${tool.name}.${field} has no .describe()`);
+    assert.equal('outputSchema' in tool, false, `${tool.name} must not declare outputSchema`);
+    const properties = jsonSchema.properties ?? {};
+    for (const field of Object.keys(properties)) {
+      const property = properties[field];
+      assert.ok(property && property !== true && property.description, `${tool.name}.${field} has no .describe()`);
     }
   }
 });

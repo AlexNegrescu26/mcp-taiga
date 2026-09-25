@@ -11,9 +11,8 @@
  * then work with named records.
  */
 
-import type { ZodType } from 'zod';
-import type { CallToolResult, ToolAnnotations } from '@modelcontextprotocol/sdk/types.js';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { ZodObject, ZodType } from 'zod';
+import type { CallToolResult, ToolAnnotations, McpServer } from '@modelcontextprotocol/server';
 
 /** A user reference embedded in another record. Taiga sends `full_name_display`, never `full_name` here. */
 export interface UserRef {
@@ -251,41 +250,14 @@ export interface ApiError extends Error {
  * server needs.
  *
  * `register` exists instead of a bare `handler` because a handler's argument type comes from its
- * own zod schema, and no single field type can hold six different handlers without a cast. Erasing
- * to `never` makes the handler unassignable to the SDK's callback, and widening it back requires
- * `as unknown as`, which is exactly the laundering the lint rules forbid. Registering inside the
- * module keeps the concrete type in scope, so nothing is asserted anywhere.
- *
- * ```ts
- * const inputSchema = { op: z.enum(['list']), project: z.string().optional() };
- * type Args = z.output<z.ZodObject<typeof inputSchema>>;
- * const annotations: ToolAnnotations = { readOnlyHint: true };
- * const handler = async ({ op, project }: Args): Promise<CallToolResult> => …;
- *
- * export const tools: RegisteredTool[] = [{
- *   name: 'projects', title: 'Projects', description: '…', inputSchema, annotations,
- *   register(server) {
- *     server.registerTool('projects', { title: 'Projects', description: '…', inputSchema, annotations }, guard(handler));
- *   },
- * }];
- * ```
+ * own zod schema, and no single field type can hold six different handlers without a cast. Registering
+ * inside the module keeps the concrete type in scope, so nothing is asserted anywhere.
  */
-/**
- * A tool's zod argument schema as the registry stores it: field name to validator.
- *
- * Defined structurally rather than as zod's own `ZodRawShape`, so the registry does not depend on
- * that library's naming. Each tool module keeps its concrete schema object and passes THAT to the
- * SDK, so this erased form only has to describe what the suites read back.
- */
-export interface ToolSchemaMap {
-  [field: string]: ZodType;
-}
-
 export interface RegisteredTool {
   name: string;
   title: string;
   description: string;
-  inputSchema: ToolSchemaMap;
+  inputSchema: ZodObject<Record<string, ZodType>>;
   annotations: ToolAnnotations;
   /** Register this tool on the server, with its argument type still concrete. */
   register(server: McpServer): void;

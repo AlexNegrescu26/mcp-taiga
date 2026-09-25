@@ -8,8 +8,8 @@
  *
  * Credentials come from the environment: TAIGA_API_URL, TAIGA_USERNAME, TAIGA_PASSWORD.
  */
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { McpServer } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -25,8 +25,10 @@ function createServer(): McpServer {
   const server = new McpServer(SERVER_INFO, {
     capabilities: { tools: {}, resources: {} },
     instructions: 'Read and manage Taiga projects: user stories, tasks, issues, sprints, epics, wiki pages, '
-      + 'comments and attachments. Project arguments accept a numeric ID or a slug; work items accept a numeric '
-      + 'ID or a #reference (a #reference also needs the project).',
+      + 'comments and attachments. Start with projects op=list when the project is unknown, then prefer returned '
+      + 'numeric IDs. For every domain, choose op first and send only arguments listed for that op. Project '
+      + 'arguments accept a numeric ID or a slug; work items accept a numeric ID or a #reference (a #reference also '
+      + 'needs the project).',
   });
 
   server.registerResource(
@@ -69,8 +71,7 @@ if (process.env.TAIGA_HTTP_PORT) {
   await startHttpServer(port, host, createServer);
   console.error(`${SERVER_INFO.name} ${SERVER_INFO.version}: ${count} tools (http://${host}:${port}/mcp)`);
 } else {
-  const server = createServer();
   console.error(`${SERVER_INFO.name} ${SERVER_INFO.version}: ${count} tools`
     + `${isConfigured() ? '' : ' (TAIGA_USERNAME/TAIGA_PASSWORD not set)'}`);
-  await server.connect(new StdioServerTransport());
-}
+  serveStdio(createServer);
+ }

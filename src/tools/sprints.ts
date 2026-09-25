@@ -6,16 +6,16 @@ import { isNumericId, projectUserNames, resolveProjectId, resolveSprintId } from
 import { sprintLine, workLine, details, listing, day, pointsSum } from '../format.js';
 import { calculateCompletionPercentage, createSuccessResponse, guard } from '../utils.js';
 
-const inputSchema = {
+const inputSchema = z.object({
   op: z.enum(['list', 'get', 'create', 'stats']).describe('Operation to perform'),
   project: z.string().optional().describe('Project ID or slug'),
   sprint: z.string().optional().describe('Sprint ID or name (for get, stats)'),
   name: z.string().optional().describe('Sprint name (for create)'),
   start: z.string().optional().describe('Start date YYYY-MM-DD (for create)'),
   finish: z.string().optional().describe('Finish date YYYY-MM-DD (for create)'),
-};
+});
 
-type Args = z.output<z.ZodObject<typeof inputSchema>>;
+type Args = z.output<typeof inputSchema>;
 
 const description = `Manage Taiga sprints (milestones): list, inspect, create, or fetch statistics.
 
@@ -27,7 +27,7 @@ Operations:
 Sprint deletion is intentionally not exposed: removing a milestone detaches every story and task on it, so it
 is a board-wide edit that belongs in the Taiga UI. Delete individual work items with the work tool instead.`;
 
-const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, openWorldHint: true };
+const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 
 const handler = async ({ op, project, sprint, name, start, finish }: Args): Promise<CallToolResult> => {
       switch (op) {

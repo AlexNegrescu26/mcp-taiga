@@ -16,7 +16,7 @@ import {
   resolveSprintId,
   resolveTaxonomyId,
 } from '../taiga.js';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import type { McpServer } from "@modelcontextprotocol/server";
 import type {
   CallToolResult,
   ItemTypeKey,
@@ -283,7 +283,7 @@ function renderDetail(item: TaigaWorkItem, namesById?: Map<number, string>): str
   ]);
 }
 
-const inputSchema = {
+const inputSchema = z.object({
   op: z.enum(['list', 'get', 'create', 'update', 'link', 'unlink', 'delete']).describe('Operation to perform'),
   type: z.enum(['issue', 'story', 'task', 'epic']).describe('Work item type'),
   project: z.string().optional().describe('Project ID or slug'),
@@ -304,16 +304,17 @@ const inputSchema = {
   parent: z.union([z.number().int(), z.string()]).optional().describe('Parent story (tasks) or epic (link/unlink)'),
   items: z
     .array(z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.string())])))
+    .max(MAX_BATCH_SIZE)
     .optional()
-    .describe('Batch create items array (max 20)'),
+    .describe(`Batch create items array (max ${MAX_BATCH_SIZE})`),
   watcher: z.string().optional().describe('Filter by watcher username, email, or "me"'),
   closed: z.boolean().optional().describe('Filter by closed state'),
   q: z.string().optional().describe('Full-text search query'),
   orderBy: z.string().optional().describe('Order by field, prefix "-" for desc'),
   limit: z.number().int().positive().optional().describe('Maximum number of items to return'),
-};
+});
 
-type Args = z.output<z.ZodObject<typeof inputSchema>>;
+type Args = z.output<typeof inputSchema>;
 
 const description = `Manage Taiga work items (issues, user stories, tasks, epics).
 

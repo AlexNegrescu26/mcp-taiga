@@ -4,7 +4,7 @@
 [![npm version](https://img.shields.io/npm/v/mcp-taiga)](https://www.npmjs.com/package/mcp-taiga)
 ![Node.js](https://img.shields.io/badge/node-%E2%89%A520.11-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![MCP](https://img.shields.io/badge/MCP-2025--11--25-black)
+![MCP](https://img.shields.io/badge/MCP-2026--07--28-black)
 
 Model Context Protocol (MCP) server for Taiga project management, written in TypeScript and built on the Model Context Protocol SDK over stdio transport (with an optional streamable HTTP transport for remote and web-based clients). It connects LLM clients to Taiga instances to inspect and manage projects, work items (issues, user stories, tasks, epics), sprints, comments, attachments, and wiki pages.
 
@@ -580,7 +580,7 @@ Manage file attachments on work items and wiki pages (`type`: `issue`, `story`, 
 | --- | --- | --- | --- |
 | `list` | List attachments on an item | `type`, `item` | `project` (required for `#ref` or wiki slug) |
 | `upload` | Upload a file from local path or base64 | `type`, `item`, `filePath` *or* `fileContent` | `project`, `fileName`, `mimeType`, `description` |
-| `download` | Fetch attachment metadata; optionally writes file to disk | `type`, `attachmentId` | `savePath` (path to save downloaded file) |
+| `download` | Fetch attachment metadata; optionally return or save file bytes | `type`, `attachmentId` | `savePath` (path to save downloaded file), `includeContent` (return bytes; default false) |
 | `delete` | Permanently delete an attachment | `type`, `attachmentId` | *(none)* |
 
 ### 6. `wiki`

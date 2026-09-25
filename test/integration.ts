@@ -1,13 +1,6 @@
 #!/usr/bin/env node
-/**
- * Live integration smoke test against a real Taiga instance.
- * Reads existing project data using MCP protocol over stdio.
- * Never creates, modifies, or deletes anything.
- */
-
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { Client } from "@modelcontextprotocol/client";
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import dotenv from 'dotenv';
@@ -95,7 +88,7 @@ interface CallResult {
 }
 
 async function call(name: string, args: ToolCallArgs = {}): Promise<CallResult> {
-  const res = await client.callTool({ name, arguments: args }, CallToolResultSchema);
+  const res = await client.callTool({ name, arguments: args });
   const blocks = 'content' in res && Array.isArray(res.content) ? res.content : [];
   const text = blocks.map((c) => (c.type === 'text' ? c.text : '')).join('\n');
 

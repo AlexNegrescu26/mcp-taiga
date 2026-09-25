@@ -11,9 +11,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { Client } from "@modelcontextprotocol/client";
 import { z } from 'zod';
 import { allTools } from '../src/tools/index.js';
 import { isNumericId } from '../src/taiga.js';
@@ -1360,8 +1359,7 @@ async function runToolCheck(
 ): Promise<CallToolResult> {
   try {
     const result = await client.request(
-      { method: 'tools/call', params: { name, arguments: args } },
-      CallToolResultSchema,
+      { method: 'tools/call', params: { name, arguments: args } }
     );
 
     if (expectError) {
@@ -1412,6 +1410,7 @@ let listAttachmentsRes!: CallToolResult;
 let listWikiRes!: CallToolResult;
 let getLongDescRes!: CallToolResult;
 let downloadNoSaveRes!: CallToolResult;
+let downloadWithContentRes!: CallToolResult;
 let downloadWithSaveRes!: CallToolResult;
 let downloadForeignHostRes!: CallToolResult;
 let downloadExistingFileRes!: CallToolResult;
@@ -1754,6 +1753,12 @@ try {
     type: 'issue',
     attachmentId: '701',
   });
+  downloadWithContentRes = await runToolCheck('attachments', {
+    op: 'download',
+    type: 'issue',
+    attachmentId: '701',
+    includeContent: true,
+  });
   downloadWithSaveRes = await runToolCheck('attachments', {
     op: 'download',
     type: 'issue',
@@ -2080,8 +2085,7 @@ try {
   try {
     await leakClient.connect(leakTransport);
     leakToolRes = await leakClient.request(
-      { method: 'tools/call', params: { name: 'projects', arguments: { op: 'list' } } },
-      CallToolResultSchema,
+      { method: 'tools/call', params: { name: 'projects', arguments: { op: 'list' } } }
     );
 
     const prevApiUrl = process.env['TAIGA_API_URL'];
@@ -2108,11 +2112,11 @@ try {
   await runContractAssertion('every (tool, op) pair in allTools was exercised', () => {
     const expectedMatrix = new Set<string>();
     for (const tool of allTools) {
-      const opSchema = tool.inputSchema['op'];
-      if (opSchema instanceof z.ZodEnum) {
-        for (const op of opSchema.options) {
-          expectedMatrix.add(`${tool.name}:${String(op)}`);
-        }
+      const properties = z.toJSONSchema(tool.inputSchema).properties ?? {};
+      const opProperty = properties.op;
+      const operations = opProperty && opProperty !== true && Array.isArray(opProperty.enum) ? opProperty.enum : [];
+      for (const op of operations) {
+        expectedMatrix.add(`${tool.name}:${String(op)}`);
       }
     }
     assert.ok(expectedMatrix.size > 0, 'derived expected op matrix must not be empty');
@@ -2393,6 +2397,8 @@ try {
     const noSaveText = resultText(downloadNoSaveRes);
     assert.ok(noSaveText.includes('test-attachment.txt'), 'download without savePath must name the file');
     assert.ok(noSaveText.includes('savePath'), 'download without savePath must note savePath is needed');
+    assert.equal(downloadNoSaveRes.content.filter((block) => block.type === 'resource').length, 0, 'metadata-only download must not include file bytes');
+    assert.equal(downloadWithContentRes.content.filter((block) => block.type === 'resource').length, 1, 'includeContent download must include file bytes');
 
     // 7. Attachments download with savePath writes bytes to disk and reports path
     const withSaveText = resultText(downloadWithSaveRes);

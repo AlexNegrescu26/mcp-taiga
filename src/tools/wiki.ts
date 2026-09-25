@@ -26,15 +26,15 @@ async function resolveWikiPage(page: string | number | undefined | null, project
   return get<TaigaWikiPage>(`${API_ENDPOINTS.WIKI}/by_slug`, { slug: raw, project: projectId });
 }
 
-const inputSchema = {
+const inputSchema = z.object({
   op: z.enum(['list', 'get', 'create', 'update', 'delete', 'watch']).describe('Operation to perform: list, get, create, update, delete, watch'),
   project: z.string().optional().describe('Project ID or slug'),
   page: z.string().optional().describe('Wiki page ID or slug'),
   content: z.string().optional().describe('Wiki page content in Markdown'),
   watch: z.boolean().optional().describe('True to watch, false to unwatch (default true)'),
-};
+});
 
-type Args = z.output<z.ZodObject<typeof inputSchema>>;
+type Args = z.output<typeof inputSchema>;
 
 const description = `Create, inspect, update, delete, or watch wiki pages in a project.
 
@@ -47,7 +47,7 @@ const description = `Create, inspect, update, delete, or watch wiki pages in a p
 | delete | page | project | Delete wiki page permanently; project needed if page is slug |
 | watch | page | project, watch | Watch (default) or unwatch wiki page; project needed if page is slug |`;
 // Per-tool annotation must reflect the most destructive op (see tools/work.ts): this tool deletes wiki pages permanently.
-const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, openWorldHint: true };
+const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 const handler = async ({ op, project, page, content, watch }: Args): Promise<CallToolResult> => {
       if (op === 'list') {

@@ -73,7 +73,7 @@ async function resolveTargetItem(
   return resolveItem(type, item, project);
 }
 
-const inputSchema = {
+const inputSchema = z.object({
   op: z.enum(['list', 'upload', 'download', 'delete']).describe('Operation to perform: list, upload, download, delete'),
   type: z.enum(['issue', 'story', 'user_story', 'task', 'epic', 'wiki']).optional().describe('Target item type (issue, story, task, epic, wiki)'),
   item: z.union([z.string(), z.number()]).optional().describe('Item numeric ID, #ref, or wiki slug'),
@@ -85,9 +85,10 @@ const inputSchema = {
   mimeType: z.string().optional().describe('MIME type of uploaded file'),
   description: z.string().optional().describe('Attachment description text'),
   savePath: z.string().optional().describe('Local filesystem path to save downloaded file'),
-};
+  includeContent: z.boolean().optional().describe('Include file bytes in the response (default false; use savePath to write a file)'),
+});
 
-type Args = z.output<z.ZodObject<typeof inputSchema>>;
+type Args = z.output<typeof inputSchema>;
 
 const description = `List, upload, download, or delete attachments across work items and wiki pages.
 
@@ -95,10 +96,10 @@ const description = `List, upload, download, or delete attachments across work i
 |---|---|---|---|
 | list | type, item | project | List attachments on a work item or wiki page |
 | upload | type, item, filePath OR fileContent | project, fileName, mimeType, description | Upload file to Taiga host from local path (harness resolves local:// URIs) or base64 |
-| download | type, attachmentId | savePath | Fetch metadata and bytes; writes to savePath when given |
+| download | type, attachmentId | savePath, includeContent | Metadata by default; set includeContent true to return bytes, or savePath to write them to disk |
 | delete | type, attachmentId | | Delete attachment by ID |`;
 // Per-tool annotation must reflect the most destructive op (see tools/work.ts): this tool deletes attachments permanently.
-const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, openWorldHint: true };
+const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 const handler = async ({
   op,
@@ -112,6 +113,7 @@ const handler = async ({
   mimeType,
   description,
   savePath,
+  includeContent,
 }: Args): Promise<CallToolResult> => {
       if (op === 'list') {
         if (!type) throw new Error('type is required for op "list" (issue, story, task, epic, wiki).');
@@ -225,7 +227,6 @@ const handler = async ({
           maxBodyLength: MAX_ATTACHMENT_BYTES,
         });
         const buffer = Buffer.from(data);
-        const base64 = buffer.toString('base64');
         const detectedMime = detectMimeType(attachment.name || '');
 
         let text: string;
@@ -253,26 +254,23 @@ const handler = async ({
             ['Size', sizeStr],
             ['MIME', detectedMime],
             ['URL', attachment.url],
-            ['Note', 'Provide savePath to write bytes to a file.'],
+            ['Note', 'Provide savePath to write bytes to a file, or set includeContent true to return them.'],
           ]);
         }
 
-        return {
-          content: [
-            {
-              type: 'resource',
-              resource: {
-                uri: attachment.url,
-                mimeType: detectedMime,
-                blob: base64,
-              },
+        const content: CallToolResult['content'] = [];
+        if (includeContent === true) {
+          content.push({
+            type: 'resource',
+            resource: {
+              uri: attachment.url,
+              mimeType: detectedMime,
+              blob: buffer.toString('base64'),
             },
-            {
-              type: 'text',
-              text,
-            },
-          ],
-        };
+          });
+        }
+        content.push({ type: 'text', text });
+        return { content };
       }
 
       if (op === 'delete') {

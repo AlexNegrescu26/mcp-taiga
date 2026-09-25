@@ -5,16 +5,18 @@
  */
 
 import assert from 'node:assert/strict';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js';
+import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { Client } from "@modelcontextprotocol/client";
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { isNumericId } from '../src/taiga.js';
 
 const serverPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'index.js');
-const client = new Client({ name: 'protocol-test', version: '1.0.0' });
+const client = new Client(
+  { name: 'protocol-test', version: '1.0.0' },
+  { versionNegotiation: { mode: 'auto' } },
+);
 const transport = new StdioClientTransport({ command: process.execPath, args: [serverPath], stderr: 'pipe' });
 
 let failed = 0;
@@ -30,6 +32,10 @@ const check = (name: string, fn: () => void): void => {
 };
 
 await client.connect(transport);
+check('server negotiates the 2026-07-28 protocol era', () => {
+  assert.equal(client.getProtocolEra(), 'modern');
+  assert.equal(client.getNegotiatedProtocolVersion(), '2026-07-28');
+});
 
 // Read the manifest the same way a consumer would, so the handshake cannot drift from it.
 const manifestPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json');
@@ -94,6 +100,11 @@ check('projects tool is annotated readOnlyHint, mutating tools are not', () => {
     assert.equal(tool.annotations?.readOnlyHint, false, `${tool.name} must have readOnlyHint: false`);
   }
 });
+check('mutating tools advertise idempotentHint: false', () => {
+  for (const tool of tools.filter((candidate) => candidate.name !== 'projects')) {
+    assert.equal(tool.annotations?.idempotentHint, false, `${tool.name} must have idempotentHint: false`);
+  }
+});
 
 check('work tool advertises destructiveHint: true, projects does not', () => {
   const work = tools.find((t) => t.name === 'work');
@@ -123,8 +134,7 @@ const rejected = await client.callTool(
   {
     name: 'attachments',
     arguments: { op: 'upload', type: 'issue', item: '1' },
-  },
-  CallToolResultSchema,
+  }
 );
 check('a handler throw is reported in-band, not as a protocol error', () => {
   assert.equal(rejected.isError, true);
