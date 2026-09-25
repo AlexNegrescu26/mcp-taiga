@@ -91,13 +91,7 @@ async function parseErrorBody(response: Response): Promise<TaigaErrorBody | unde
 }
 
 async function fetchData(url: string, init: RequestInit): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    return await globalThis.fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
+  return globalThis.fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 }
 
 function responseError(response: Response, detail: TaigaErrorBody | undefined): FetchError {

@@ -266,7 +266,7 @@ test('listing formats count headers starting with a letter and lists records', (
   }
 });
 
-test('apiBaseUrl is read lazily, after dotenv has run', () => {
+test('apiBaseUrl is read lazily, after environment loading has run', () => {
   const previous = process.env.TAIGA_API_URL;
   try {
     delete process.env.TAIGA_API_URL;

@@ -219,48 +219,42 @@ const handler = async ({
           throw new Error(`Refusing to download attachment from host "${downloadUrl.hostname}": does not match Taiga host "${taigaUrl.hostname}".`);
         }
 
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 30_000);
         let buffer: Buffer;
-        try {
-          const response = await globalThis.fetch(downloadUrl, {
-            redirect: 'error',
-            signal: controller.signal,
-          });
-          if (!response.ok) {
-            throw new Error(response.statusText || `Request failed with status code ${response.status}`);
-          }
-          const contentLength = Number(response.headers.get('content-length'));
-          if (Number.isFinite(contentLength) && contentLength > MAX_ATTACHMENT_BYTES) {
-            throw attachmentSizeError(contentLength);
-          }
-          if (response.body !== null) {
-            const reader = response.body.getReader();
-            const chunks: Buffer[] = [];
-            let size = 0;
-            try {
-              for (;;) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                size += value.byteLength;
-                if (size > MAX_ATTACHMENT_BYTES) {
-                  await reader.cancel();
-                  throw attachmentSizeError(size);
-                }
-                chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+        const response = await globalThis.fetch(downloadUrl, {
+          redirect: 'error',
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!response.ok) {
+          throw new Error(response.statusText || `Request failed with status code ${response.status}`);
+        }
+        const contentLength = Number(response.headers.get('content-length'));
+        if (Number.isFinite(contentLength) && contentLength > MAX_ATTACHMENT_BYTES) {
+          throw attachmentSizeError(contentLength);
+        }
+        if (response.body !== null) {
+          const reader = response.body.getReader();
+          const chunks: Buffer[] = [];
+          let size = 0;
+          try {
+            for (;;) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              size += value.byteLength;
+              if (size > MAX_ATTACHMENT_BYTES) {
+                await reader.cancel();
+                throw attachmentSizeError(size);
               }
-            } finally {
-              reader.releaseLock();
+              chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
             }
-            buffer = Buffer.concat(chunks, size);
-          } else {
-            buffer = Buffer.from(await response.arrayBuffer());
-            if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
-              throw attachmentSizeError(buffer.byteLength);
-            }
+          } finally {
+            reader.releaseLock();
           }
-        } finally {
-          clearTimeout(timeout);
+          buffer = Buffer.concat(chunks, size);
+        } else {
+          buffer = Buffer.from(await response.arrayBuffer());
+          if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+            throw attachmentSizeError(buffer.byteLength);
+          }
         }
         const detectedMime = detectMimeType(attachment.name || '');
 

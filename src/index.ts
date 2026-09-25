@@ -2,16 +2,17 @@
 
 import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import dotenv from 'dotenv';
 import { get, isConfigured } from './api.js';
 import { API_ENDPOINTS, RESOURCE_URIS, SERVER_INFO } from './constants.js';
 import { startHttpServer } from './http.js';
 import { allTools, registerAllTools } from './tools/index.js';
 import type { TaigaProject, TaigaUser } from './types.js';
 
-dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.env'), quiet: true });
+const envPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.env');
+if (existsSync(envPath)) process.loadEnvFile(envPath);
 
 function createServer(): McpServer {
   const server = new McpServer(SERVER_INFO, {

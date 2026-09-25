@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { Client } from "@modelcontextprotocol/client";
-import { fileURLToPath } from 'node:url';
+import { existsSync } from 'node:fs';
 import path from 'node:path';
-import dotenv from 'dotenv';
+import { fileURLToPath } from 'node:url';
 import { isNumericId } from '../src/taiga.js';
 
 function isAsciiLetter(char: string | undefined): boolean {
@@ -56,7 +56,8 @@ function extractRef(text: string | null | undefined): string | null {
   return isNumericId(refStr) ? refStr : null;
 }
 
-dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.env'), quiet: true });
+const envPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '.env');
+if (existsSync(envPath)) process.loadEnvFile(envPath);
 
 if (!process.env.TAIGA_USERNAME || !process.env.TAIGA_PASSWORD) {
   console.error('Skipping integration tests: TAIGA_USERNAME and TAIGA_PASSWORD are not set.');

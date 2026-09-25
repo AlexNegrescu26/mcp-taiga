@@ -29,7 +29,7 @@ The server consolidates all capabilities into 6 op-dispatching tools designed fo
 
 ## Requirements and Configuration
 
-- Node.js >= 20.11
+- Node.js >= 24
 - A Taiga account on taiga.io or a self-hosted Taiga instance
 - Three environment variables configured:
 
@@ -67,7 +67,7 @@ The fastest setup is Claude Desktop with npx (no checkout required):
 
 All harness configurations below follow this shape; only the file location and wrapper syntax differ.
 
-> **Credentials and `.env`:** a local checkout automatically loads `.env` from the repository root (see `.env.example`). An **npx install does not**: dotenv resolves relative to the package's install location inside the npm cache, so credentials passed via npx MUST be set in each harness's `env` block as shown above.
+> **Credentials and `.env`:** a local checkout automatically loads `.env` with Node's built-in environment loader (see `.env.example`). An **npx install does not**: the compiled package resolves its `.env` path inside the npm cache, so credentials passed via npx MUST be set in each harness's `env` block as shown above.
 
 ### Running From a Local Checkout
 
@@ -641,7 +641,7 @@ Context-window economics: every tool definition is paid on every session start. 
 
 - **Authentication failures** — run the `projects` tool with `op: whoami`; it reports exactly which credential exchange failed. Check for stray whitespace in env values and that the account works in the Taiga web UI.
 - **Self-hosted instance returns 404s** — `TAIGA_API_URL` must include `/api/v1`, e.g. `https://taiga.example.com/api/v1`.
-- **Server starts but npx client sees no tools** — confirm Node.js >= 20.11 runs in the harness's environment; GUI launchers often inherit a different PATH than your shell.
+- **Server starts but npx client sees no tools** — confirm Node.js >= 24 runs in the harness's environment; GUI launchers often inherit a different PATH than your shell.
 - **Credentials ignored under npx** — npx installs do not load `.env`; put credentials in the harness `env` block (only local checkouts auto-load `.env`).
 - **HTTP mode port conflicts** — another process owns the port; pick another `TAIGA_HTTP_PORT`. The server exits nonzero with a listen error rather than retrying.
 - **Empty result sets** — listings report `<items> in <project>: 0`; that is a successful response, not an error.
