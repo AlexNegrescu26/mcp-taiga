@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file. The format is b
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-25
+
 ### Changed
 
 - Migrated the server, client tests, and HTTP adapter to the official MCP TypeScript SDK v2.1.0 split packages.
