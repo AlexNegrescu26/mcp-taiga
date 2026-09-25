@@ -1,13 +1,5 @@
 #!/usr/bin/env node
 
-/**
- * Taiga MCP server.
- *
- * Transports: stdio by default; streamable HTTP at http://<host>:<port>/mcp when
- * TAIGA_HTTP_PORT is set (TAIGA_HTTP_HOST optionally overrides the bind host).
- *
- * Credentials come from the environment: TAIGA_API_URL, TAIGA_USERNAME, TAIGA_PASSWORD.
- */
 import { McpServer } from '@modelcontextprotocol/server';
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import path from 'node:path';

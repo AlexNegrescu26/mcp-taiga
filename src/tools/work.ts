@@ -165,8 +165,6 @@ async function buildPayload(
   for (const key of Object.keys(fields)) {
     if (fields[key] === undefined || allowed.has(key)) continue;
     if (key === 'parent' && type === 'story') {
-      // Epic membership is a relation, not a field on the story: PATCHing an `epic` key is
-      // silently ignored by Taiga, so point the caller at the ops that actually work.
       throw new Error('A story\'s epic cannot be set with update. Use op "link" or "unlink" with parent set to the epic.');
     }
     throw new Error(`Field "${key}" is not supported for ${type}.`);
@@ -329,8 +327,6 @@ Operations:
   undone. Batch is deliberately create-only: up to 20 items can be created in a call, exactly one can be
   deleted, so a mistaken call cannot clear a board.`;
 
-// destructiveHint covers the whole tool because MCP annotations are per-tool, not per-op:
-// `delete` can destroy, so the tool must declare it even though list/get/create cannot.
 const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 const handler = async ({
@@ -485,7 +481,6 @@ const handler = async ({
       severity,
       issueType,
       points,
-      // Was omitted, so a task reparent was accepted, dropped, and reported as success.
       parent,
     });
     if (Object.keys(payload).length === 0) throw new Error('No fields provided to update.');
@@ -518,7 +513,6 @@ const handler = async ({
     if (items) {
       throw new Error('Delete takes exactly one item. Batch is create-only, so a single mistaken call cannot clear a board.');
     }
-    // Read first, so the confirmation names what is gone: Taiga keeps no trash for work items.
     const doomed = await resolveItem(internalKey, item, project);
     await del<void>(`${ITEM_TYPES[internalKey].path}/${doomed.id}`);
     return createSuccessResponse(

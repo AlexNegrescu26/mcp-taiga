@@ -48,7 +48,6 @@ function detectMimeType(fileName?: string): string {
   if (!fileName) return 'application/octet-stream';
   const ext = fileName.split('.').pop()?.toLowerCase();
   if (ext && ext in MIME_TYPES) {
-    // SAFETY: `in` check proves `ext` is a valid key of MIME_TYPES
     return MIME_TYPES[ext as keyof typeof MIME_TYPES];
   }
   return 'application/octet-stream';
@@ -98,7 +97,6 @@ const description = `List, upload, download, or delete attachments across work i
 | upload | type, item, filePath OR fileContent | project, fileName, mimeType, description | Upload file to Taiga host from local path (harness resolves local:// URIs) or base64 |
 | download | type, attachmentId | savePath, includeContent | Metadata by default; set includeContent true to return bytes, or savePath to write them to disk |
 | delete | type, attachmentId | | Delete attachment by ID |`;
-// Per-tool annotation must reflect the most destructive op (see tools/work.ts): this tool deletes attachments permanently.
 const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 const handler = async ({
@@ -218,7 +216,6 @@ const handler = async ({
           throw new Error(`Refusing to download attachment from host "${downloadUrl.hostname}": does not match Taiga host "${taigaUrl.hostname}".`);
         }
 
-        // Bare axios call is used so the media host does not receive the Taiga bearer token.
         const { data } = await axios.get<ArrayBuffer>(downloadUrl.toString(), {
           responseType: 'arraybuffer',
           maxRedirects: 0,

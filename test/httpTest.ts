@@ -1,9 +1,4 @@
 #!/usr/bin/env node
-/**
- * HTTP transport test: boots dist/src/index.js over streamable HTTP (TAIGA_HTTP_PORT)
- * and exercises the real handshake. Needs no Taiga credentials — it only asserts
- * protocol surface and routing, never tool execution.
- */
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
@@ -36,7 +31,6 @@ const getFreePort = (): Promise<number> =>
     srv.on('error', reject);
     srv.listen(0, '127.0.0.1', () => {
       const addr = srv.address();
-      // SAFETY: TCP server.address() returns AddressInfo with port when listening on 127.0.0.1
       const info = addr as AddressInfo | null;
       const free = info && 'port' in info ? info.port : 0;
       srv.close(() => resolve(free));
@@ -79,7 +73,6 @@ interface HttpResult {
 
 type HttpMethod = 'GET' | 'POST' | 'DELETE';
 
-/** POST the given raw payload (pre-serialised) over HTTP; null body for GET/DELETE. */
 const request = (urlPath: string, payload: string | null, method: HttpMethod = 'POST'): Promise<HttpResult> =>
   new Promise((resolve, reject) => {
     const req = http.request(
@@ -119,12 +112,10 @@ interface JsonRpcResponse {
   error?: { code: number; message: string };
 }
 
-// Pull the JSON-RPC payload out of an SSE "message" event; plain-JSON responses pass through.
 const extract = (body: string): JsonRpcResponse | undefined => {
   const match = body.match(/event: message\ndata: (.*?)(?:\n\n|$)/s);
   const raw = (match ? match[1] : body).trim();
   if (!raw) return undefined;
-  // SAFETY: only called on /mcp 200 responses, whose body is a JSON-RPC response object
   return JSON.parse(raw) as JsonRpcResponse;
 };
 

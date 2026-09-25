@@ -6,9 +6,6 @@ import { commentLine, listing } from '../format.js';
 import { createSuccessResponse, guard } from '../utils.js';
 import { SUCCESS_MESSAGES } from '../constants.js';
 
-/**
- * Resolve a wiki page by database ID or slug.
- */
 async function resolveWikiTarget(
   identifier: string | number,
   projectIdentifier?: string | number,
@@ -43,7 +40,6 @@ const description = `List, add, edit, or delete comments on issues, user stories
 | add | type, item, text | project |
 | edit | type, item, commentId, text | project |
 | delete | type, item, commentId | project |`;
-// Per-tool annotation must reflect the most destructive op (see tools/work.ts): this tool deletes comments.
 const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 const handler = async ({ op, type, item, project, text, commentId, includeDeleted }: Args): Promise<CallToolResult> => {

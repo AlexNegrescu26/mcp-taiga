@@ -6,11 +6,6 @@ import { createSuccessResponse, guard } from '../utils.js';
 import { day, details, listing, wikiLine } from '../format.js';
 import type { CallToolResult, RegisteredTool, TaigaWikiPage, ToolAnnotations } from '../types.js';
 
-/**
- * Resolve a wiki page by database ID or slug.
- * @param page wiki page ID or slug
- * @param project required when page is a slug
- */
 async function resolveWikiPage(page: string | number | undefined | null, project?: string | number): Promise<TaigaWikiPage> {
   if (page === undefined || page === null || page === '') {
     throw new Error('Wiki page ID or slug is required.');
@@ -46,7 +41,6 @@ const description = `Create, inspect, update, delete, or watch wiki pages in a p
 | update | page, content | project | Update wiki page content (OCC versioned); project needed if page is slug |
 | delete | page | project | Delete wiki page permanently; project needed if page is slug |
 | watch | page | project, watch | Watch (default) or unwatch wiki page; project needed if page is slug |`;
-// Per-tool annotation must reflect the most destructive op (see tools/work.ts): this tool deletes wiki pages permanently.
 const annotations: ToolAnnotations = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true };
 
 const handler = async ({ op, project, page, content, watch }: Args): Promise<CallToolResult> => {

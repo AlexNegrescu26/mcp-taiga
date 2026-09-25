@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/**
- * Offline unit tests: pure helpers and tool-definition invariants. No network, no credentials.
- */
 
 import assert from 'node:assert/strict';
 import axios from 'axios';
@@ -138,8 +135,6 @@ const tests: [string, () => void | Promise<void>][] = [];
 const test = (name: string, fn: () => void | Promise<void>): number => tests.push([name, fn]);
 
 test('userName reads the key Taiga actually sends', () => {
-  // Regression: `*_extra_info` objects have `full_name_display` and `username`, never `full_name`.
-  // Reading `.full_name` made every assigned row print "Unassigned".
   assert.equal(userName({ username: 'jdoe', full_name_display: 'Jane Doe' }), 'Jane Doe');
   assert.equal(userName({ username: 'jdoe', full_name: 'Jane Doe' }), 'Jane Doe');
   assert.equal(userName({ username: 'jdoe' }), 'jdoe');
@@ -149,7 +144,6 @@ test('userName reads the key Taiga actually sends', () => {
 });
 
 test('assignees never hides a co-assignee and uses name map when provided', () => {
-  // Taiga user stories are multi-assignee: `assigned_users` holds IDs, `assigned_to` only the primary.
   const names = new Map<number, string>([[8, 'Ana'], [26, 'Sam Lee'], [28, 'Jane Doe']]);
   const shared: TaigaWorkItem = {
     id: 1,
@@ -166,7 +160,6 @@ test('assignees never hides a co-assignee and uses name map when provided', () =
 });
 
 test('workLine drops empty segments and honours show.sprint === false', () => {
-  // Missing sprint and assignee must not leave `| - |` noise
   const bareItem: TaigaWorkItem = {
     id: 101,
     ref: 1,
@@ -177,7 +170,6 @@ test('workLine drops empty segments and honours show.sprint === false', () => {
   assert.equal(line, '#1 Bare issue | New | id=101');
   assert.ok(!line.includes(' - '), `workLine should not contain ' - ', got: "${line}"`);
 
-  // show.sprint === false must omit the sprint column
   const sprintItem: TaigaWorkItem = {
     id: 201,
     ref: 2,
@@ -220,26 +212,20 @@ test('workLine and sprintLine flatten embedded newlines into a single line', () 
 });
 
 test('pointsSum totals numbers, arrays, role objects, handles empty/junk, and formats safely', () => {
-  // Plain number
   assert.equal(pointsSum(42), 42);
   assert.equal(pointsSum(0), 0);
   assert.equal(pointsSum(3.5), 3.5);
 
-  // Role-keyed object and multi-role summing to total
   assert.equal(pointsSum({ '133': 90 }), 90);
   assert.equal(pointsSum({ '133': 90, '134': 15, '135': 5.5 }), 110.5);
 
-  // Array [40] and [10, 30]
   assert.equal(pointsSum([40]), 40);
   assert.equal(pointsSum([10, 30]), 40);
 
-  // null, undefined, and {} all giving 0
   assert.equal(pointsSum(null), 0);
   assert.equal(pointsSum(undefined), 0);
   assert.equal(pointsSum({}), 0);
 
-  // Non-numeric junk inside a shape contributing 0 rather than producing NaN
-  // Fixtures come through JSON.parse deliberately, because the declared PointsValue type cannot express junk
   const junkArray: PointsValue = JSON.parse('[40, "junk", null, null]');
   const junkRoles: PointsValue = JSON.parse('{"133": 90, "134": "invalid", "135": null}');
   const junkStrings: PointsValue = JSON.parse('["foo", "bar"]');
@@ -247,7 +233,6 @@ test('pointsSum totals numbers, arrays, role objects, handles empty/junk, and fo
   assert.equal(pointsSum(junkRoles), 90);
   assert.equal(pointsSum(junkStrings), 0);
 
-  // sprintLine and workLine never emit "[object Object]" or "NaN" with object/array shapes
   const workObj: TaigaWorkItem = { id: 1, ref: 10, subject: 'Task', total_points: { '133': 90 } };
   const workArr: TaigaWorkItem = { id: 2, ref: 11, subject: 'Story', total_points: [40] };
   const workObjLine = workLine(workObj);
@@ -267,14 +252,12 @@ test('pointsSum totals numbers, arrays, role objects, handles empty/junk, and fo
 });
 
 test('listing formats count headers starting with a letter and lists records', () => {
-  // Empty case
   const empty = listing('issues in acme-web', []);
   assert.equal(empty, 'issues in acme-web: 0');
   assert.equal(empty.split('\n').length, 1);
   assert.ok(empty.endsWith(': 0'));
   assert.ok(isListHeader(empty), `empty listing "${empty}" must match list header contract`);
 
-  // Plain case (untruncated)
   const single = listing('projects', ['19 acme-web | Acme Web | private']);
   assert.equal(single, 'projects: 1\n19 acme-web | Acme Web | private');
 
@@ -284,15 +267,12 @@ test('listing formats count headers starting with a letter and lists records', (
   ]);
   assert.equal(multiple, 'user stories in acme-web: 2\n#70 Story 1 | id=1\n#71 Story 2 | id=2');
 
-  // Truncated N of M case
   const truncated = listing('tasks in acme-web', ['#10 Task 1 | id=10', '#11 Task 2 | id=11', '#12 Task 3 | id=12'], 64);
   assert.equal(truncated, 'tasks in acme-web: 3 of 64\n#10 Task 1 | id=10\n#11 Task 2 | id=11\n#12 Task 3 | id=12');
 
-  // Total matching rows length is plain format (not N of M)
   const fullCount = listing('tasks in acme-web', ['#10 Task 1 | id=10'], 1);
   assert.equal(fullCount, 'tasks in acme-web: 1\n#10 Task 1 | id=10');
 
-  // Regression: header MUST NOT match record-line starting with digit (e.g. old "1 projects" shape)
   for (const rendered of [empty, single, multiple, truncated, fullCount]) {
     const header = rendered.split('\n')[0];
     assert.ok(!isDigitRecord(header), `header "${header}" must not match record-line starting with a digit`);
@@ -301,10 +281,6 @@ test('listing formats count headers starting with a letter and lists records', (
 });
 
 test('apiBaseUrl is read lazily, after dotenv has run', () => {
-  // Regression: BASE_URL used to be a module-level constant. ES imports evaluate before
-  // src/index.js calls dotenv.config(), so TAIGA_API_URL from .env was ignored and every
-  // request silently went to the public taiga.io — which 401s with valid self-hosted
-  // credentials ("No active account found with the given credentials").
   const previous = process.env.TAIGA_API_URL;
   try {
     delete process.env.TAIGA_API_URL;
@@ -340,33 +316,27 @@ test('apiBaseUrl warns once for non-loopback http URLs and does not warn for htt
     warnings.push(parts.join(' '));
   };
   try {
-    // https:// must not warn
     process.env.TAIGA_API_URL = 'https://secure.taiga.example/api/v1';
     assert.equal(apiBaseUrl(), 'https://secure.taiga.example/api/v1');
     assert.equal(warnings.length, 0);
 
-    // http://localhost must not warn
     process.env.TAIGA_API_URL = 'http://localhost:8000/api/v1';
     assert.equal(apiBaseUrl(), 'http://localhost:8000/api/v1');
     assert.equal(warnings.length, 0);
 
-    // http://127.0.0.1 must not warn
     process.env.TAIGA_API_URL = 'http://127.0.0.1:8000/api/v1';
     assert.equal(apiBaseUrl(), 'http://127.0.0.1:8000/api/v1');
     assert.equal(warnings.length, 0);
 
-    // http://[::1] must not warn
     process.env.TAIGA_API_URL = 'http://[::1]:8000/api/v1';
     assert.equal(apiBaseUrl(), 'http://[::1]:8000/api/v1');
     assert.equal(warnings.length, 0);
 
-    // http://non-loopback must produce a warning once and return URL unchanged
     process.env.TAIGA_API_URL = 'http://taiga.lan/api/v1';
     assert.equal(apiBaseUrl(), 'http://taiga.lan/api/v1');
     assert.equal(warnings.length, 1);
     assert.ok(warnings[0].includes('WARNING') && warnings[0].includes('cleartext'));
 
-    // second call must not produce another warning
     assert.equal(apiBaseUrl(), 'http://taiga.lan/api/v1');
     assert.equal(warnings.length, 1);
   } finally {
@@ -447,7 +417,6 @@ test('tool-definition invariants: 6 tools, required op, described properties, no
     const jsonSchema = z.toJSONSchema(tool.inputSchema);
     assert.equal(jsonSchema.type, 'object', `${tool.name} input schema is not an object`);
     assert.ok(jsonSchema.required?.includes('op'), `${tool.name} must require 'op'`);
-    // SAFETY: checking runtime absence of outputSchema property on tool definition
     assert.equal('outputSchema' in tool, false, `${tool.name} must not declare outputSchema`);
     const properties = jsonSchema.properties ?? {};
     for (const field of Object.keys(properties)) {

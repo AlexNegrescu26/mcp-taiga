@@ -1,10 +1,3 @@
-/**
- * Streamable HTTP transport: serves the same MCP server at http://<host>:<port>/mcp
- * instead of stdio when TAIGA_HTTP_PORT is set.
- *
- * The v2 handler serves both the 2026-07-28 protocol and legacy clients statelessly.
- * Node host/origin validation stays in front of the handler for DNS-rebinding protection.
- */
 
 import http from 'node:http';
 import type { RequestListener, Server } from 'node:http';
@@ -20,12 +13,6 @@ import { MAX_ATTACHMENT_BYTES } from './constants.js';
 
 const MCP_PATH = '/mcp';
 
-/**
- * Start the HTTP server and resolve once it is listening.
- * @param port TCP port to bind
- * @param host bind host (TAIGA_HTTP_HOST or 127.0.0.1)
- * @param createServer shared factory building a fully registered server per request
- */
 export async function startHttpServer(port: number, host: string, createServer: () => McpServer): Promise<Server> {
   const isLoopback = host === 'localhost' || host === '127.0.0.1' || host === '::1';
   if (!isLoopback) {
@@ -33,7 +20,6 @@ export async function startHttpServer(port: number, host: string, createServer: 
   }
 
   const hostHeader = host.includes(':') ? `[${host}]` : host;
-  // Base64 and JSON expand a 10 MiB attachment; keep the HTTP cap finite but above that payload.
   const mcpHandler = createMcpHandler(createServer, { maxRequestBodySize: MAX_ATTACHMENT_BYTES * 2 });
   const nodeHandler = toNodeHandler(mcpHandler, { maxRequestBodySize: MAX_ATTACHMENT_BYTES * 2 });
   const validateHost = isLoopback ? localhostHostValidation() : hostHeaderValidation([hostHeader]);

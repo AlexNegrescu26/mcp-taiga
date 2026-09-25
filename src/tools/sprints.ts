@@ -64,8 +64,6 @@ const handler = async ({ op, project, sprint, name, start, finish }: Args): Prom
             ['points', milestone.total_points !== undefined ? `${pointsSum(milestone.closed_points)}/${pointsSum(milestone.total_points)}` : null],
             ['description', milestone.description],
           ]);
-          // The milestone payload's nested `user_stories` omit `assigned_users`, so rendering them
-          // shows only the primary assignee and hides co-assignees. Fetch the real records instead.
           const stories = await get<TaigaWorkItem[]>(API_ENDPOINTS.USER_STORIES, { project: milestone.project, milestone: sprintId });
           const namesById = stories.some((s) => (s.assigned_users?.length ?? 0) > 1) && milestone.project !== undefined
             ? await projectUserNames(milestone.project)
@@ -106,7 +104,6 @@ const handler = async ({ op, project, sprint, name, start, finish }: Args): Prom
             sprintId = await resolveSprintId(project, sprint);
           }
           const stats = await get<TaigaMilestoneStats>(`/milestones/${sprintId}/stats`);
-          // Points arrive as a role-keyed object and an array here, unlike everywhere else.
           const donePoints = pointsSum(stats.completed_points);
           const allPoints = pointsSum(stats.total_points);
           const pointsPct = calculateCompletionPercentage(donePoints, allPoints);

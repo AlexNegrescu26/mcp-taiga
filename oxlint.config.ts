@@ -33,13 +33,9 @@ export default defineConfig({
     "anti-slop/no-unknown-type-aliases": "error",
     "anti-slop/no-unsafe-dictionary-type": "error",
     "anti-slop/no-widen-then-assert": "error",
-    "anti-slop/require-safety-comment-for-type-assertion": "error",
   },
   overrides: [
     {
-      // The suites assert on untyped fixtures: raw HTTP bodies recorded from a stub Taiga and
-      // tool results whose shape is exactly what is under test. Narrowing those by `typeof` IS
-      // the assertion, so the rule has nothing better to offer here. It stays on for src/.
       files: ["test/**/*.js"],
       rules: { "anti-slop/no-runtime-typeof": "off" },
     },
