@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import axios from 'axios';
-import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { z } from 'zod';
 import { allTools } from '../src/tools/index.js';
 import { ITEM_TYPES, findIdByName, isNumericId, itemType, patchItem } from '../src/taiga.js';
@@ -18,7 +16,6 @@ import {
 import { assignees, listing, pointsSum, sprintLine, userName, workLine } from '../src/format.js';
 import { DEFAULT_API_URL, apiBaseUrl, clearMetadata, get, getMetadata, login } from '../src/api.js';
 import type {
-  JsonBody,
   JsonValue,
   PointsValue,
   TaigaMilestone,
@@ -28,54 +25,43 @@ import type {
 
 interface MockRequest {
   method: string;
-  url?: string;
-  data?: JsonBody | JsonValue | string;
-  timeout?: number;
+  url: string;
+  body: RequestInit['body'];
+  headers: Record<string, string>;
+  signal: AbortSignal | null | undefined;
 }
 
 const mockRequests: MockRequest[] = [];
-axios.defaults.adapter = async (config: InternalAxiosRequestConfig): Promise<AxiosResponse> => {
+globalThis.fetch = async (input: string | URL | Request, init: RequestInit = {}): Promise<Response> => {
+  const url = input instanceof Request ? input.url : input instanceof URL ? input.toString() : input;
+  const method = (init.method ?? 'GET').toUpperCase();
+  const signal = init.signal;
+  if (signal?.aborted) {
+    const error = signal.reason instanceof Error ? signal.reason : new Error('Request aborted');
+    throw error;
+  }
   mockRequests.push({
-    method: (config.method ?? 'GET').toUpperCase(),
-    url: config.url,
-    data: config.data,
-    timeout: config.timeout,
+    method,
+    url,
+    body: init.body,
+    headers: Object.fromEntries(new Headers(init.headers)),
+    signal,
   });
-  if (config.url?.endsWith('/auth')) {
-    return {
-      status: 200,
-      data: { auth_token: 'unit-test-token', refresh: 'unit-test-refresh' },
-      headers: {},
-      statusText: 'OK',
-      config,
-    };
-  }
-  if (config.url?.includes('/issues/101')) {
-    if (config.method?.toLowerCase() === 'patch') {
-      const parsed = JSON.parse(String(config.data));
-      return {
-        status: 200,
-        data: { id: 101, subject: parsed.subject, version: (parsed.version ?? 0) + 1 },
-        headers: {},
-        statusText: 'OK',
-        config,
-      };
+  let data: JsonValue = { ok: true };
+  if (url.endsWith('/auth')) {
+    data = { auth_token: 'unit-test-token', refresh: 'unit-test-refresh' };
+  } else if (url.includes('/issues/101')) {
+    if (method === 'PATCH') {
+      const parsed = JSON.parse(String(init.body)) as { subject?: string; version?: number };
+      data = { id: 101, subject: parsed.subject ?? '', version: (parsed.version ?? 0) + 1 };
+    } else {
+      data = { id: 101, subject: 'Issue 101', version: 10 };
     }
-    return {
-      status: 200,
-      data: { id: 101, subject: 'Issue 101', version: 10 },
-      headers: {},
-      statusText: 'OK',
-      config,
-    };
   }
-  return {
+  return new Response(JSON.stringify(data), {
     status: 200,
-    data: { ok: true },
-    headers: {},
-    statusText: 'OK',
-    config,
-  };
+    headers: { 'Content-Type': 'application/json' },
+  });
 };
 
 process.env.TAIGA_USERNAME = process.env.TAIGA_USERNAME || 'unit_user';
@@ -447,22 +433,24 @@ test('patchItem given a record containing version issues no extra GET', async ()
   const diffReqs = mockRequests.slice(reqCountBefore);
   assert.equal(diffReqs.length, 1, 'expected exactly 1 request (PATCH only, no GET)');
   assert.equal(diffReqs[0].method, 'PATCH');
-  assert.equal(diffReqs[0].url, '/issues/101');
-  const body = JSON.parse(String(diffReqs[0].data));
+  assert.equal(diffReqs[0].url, 'https://api.taiga.io/api/v1/issues/101');
+  const body = JSON.parse(String(diffReqs[0].body));
   assert.equal(body.version, 3, 'PATCH must carry the version provided in the record');
   assert.equal(body.subject, 'new subject');
 });
 
-test('request timeout is configured to 30s on login and client requests rather than left default', async () => {
+test('request timeout uses AbortController signals on login and authenticated requests', async () => {
   await login('timeout_user', 'timeout_pass');
   const authReq = mockRequests[mockRequests.length - 1];
   assert.ok(authReq, 'expected auth request');
-  assert.equal(authReq.timeout, 30_000, `login request timeout must be 30000ms, got ${authReq.timeout}`);
+  assert.ok(authReq.signal instanceof AbortSignal, 'login request must carry an AbortSignal');
+  assert.equal(authReq.signal.aborted, false);
 
   await get<{ ok: boolean }>('/test-timeout');
   const clientReq = mockRequests[mockRequests.length - 1];
   assert.ok(clientReq, 'expected client request');
-  assert.equal(clientReq.timeout, 30_000, `client request timeout must be 30000ms, got ${clientReq.timeout}`);
+  assert.ok(clientReq.signal instanceof AbortSignal, 'authenticated request must carry an AbortSignal');
+  assert.equal(clientReq.signal.aborted, false);
 });
 
 test('getMetadata caches per path and params and serves hits without extra requests', async () => {

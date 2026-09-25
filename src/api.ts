@@ -1,6 +1,3 @@
-
-import axios, { isAxiosError } from 'axios';
-import type { AxiosInstance, AxiosResponse } from 'axios';
 import type {
   ApiError,
   AuthResponse,
@@ -40,24 +37,79 @@ export function apiBaseUrl(): string {
 
 let token: string | null = null;
 let tokenExpiresAt = 0;
-let client: AxiosInstance | null = null;
 
 export function isConfigured(): boolean {
   return Boolean(process.env.TAIGA_USERNAME && process.env.TAIGA_PASSWORD);
 }
+
 function isErrorBodyObject(body: TaigaErrorBody | undefined): body is Exclude<TaigaErrorBody, string> {
   return body !== undefined && Object(body) === body;
 }
 
+class FetchError extends Error {
+  constructor(
+    readonly status: number,
+    readonly detail: TaigaErrorBody | undefined,
+    readonly retryAfterMs: number | null,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'FetchError';
+  }
+}
+
+function buildApiUrl(path: string, params?: QueryParams): string {
+  const base = new URL(apiBaseUrl());
+  base.search = '';
+  base.hash = '';
+  if (!base.pathname.endsWith('/')) base.pathname += '/';
+  const url = new URL(path.replace(/^\/+/, ''), base);
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== null && value !== undefined) url.searchParams.append(key, String(value));
+  }
+  return url.toString();
+}
+
+async function parseResponse<T>(response: Response): Promise<T> {
+  const text = await response.text();
+  if (!text) return undefined as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return text as T;
+  }
+}
+
+async function parseErrorBody(response: Response): Promise<TaigaErrorBody | undefined> {
+  const text = await response.text();
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text) as TaigaErrorBody;
+  } catch {
+    return text;
+  }
+}
+
+async function fetchData(url: string, init: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    return await globalThis.fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function responseError(response: Response, detail: TaigaErrorBody | undefined): FetchError {
+  const message = response.statusText || `Request failed with status code ${response.status}`;
+  return new FetchError(response.status, detail, parseRetryAfter(response.headers.get('retry-after')), message);
+}
 
 function apiError(error: Error, action: string): ApiError {
-  let status: number | undefined;
-  let body: TaigaErrorBody | undefined;
+  const fetchError = error instanceof FetchError ? error : undefined;
+  const status = fetchError?.status;
+  const body = fetchError?.detail;
   let detail = error.message;
-  if (isAxiosError<TaigaErrorBody>(error)) {
-    status = error.response?.status;
-    body = error.response?.data;
-  }
   if (isErrorBodyObject(body)) {
     detail = body._error_message
       || Object.entries(body)
@@ -74,7 +126,13 @@ function apiError(error: Error, action: string): ApiError {
 
 export async function login(username: string, password: string): Promise<AuthResponse> {
   try {
-    const { data } = await axios.post<AuthResponse>(`${apiBaseUrl()}/auth`, { type: 'normal', username, password }, { timeout: REQUEST_TIMEOUT_MS });
+    const response = await fetchData(buildApiUrl('auth'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'normal', username, password }),
+    });
+    if (!response.ok) throw responseError(response, await parseErrorBody(response));
+    const data = await parseResponse<AuthResponse>(response);
     token = data.auth_token;
     tokenExpiresAt = Date.now() + 12 * 60 * 60 * 1000;
     return data;
@@ -97,54 +155,59 @@ async function getToken(): Promise<string> {
   return token;
 }
 
-function getClient(): AxiosInstance {
-  if (client) return client;
-  client = axios.create({
-    baseURL: apiBaseUrl(),
-    timeout: REQUEST_TIMEOUT_MS,
-    headers: { 'x-disable-pagination': 'true' },
-  });
-  client.interceptors.request.use(async (config) => {
-    config.headers.Authorization = `Bearer ${await getToken()}`;
-    return config;
-  });
-  return client;
-}
-
 const MAX_THROTTLE_WAIT_MS = 5000;
 
-function retryAfterMs(response?: AxiosResponse): number | null {
-  const header = response?.headers?.['retry-after'];
+function parseRetryAfter(header: string | null): number | null {
   if (!header) return null;
   const seconds = Number(header);
   if (Number.isFinite(seconds)) return seconds * 1000;
-  const when = Date.parse(String(header));
+  const when = Date.parse(header);
   return Number.isFinite(when) ? Math.max(0, when - Date.now()) : null;
 }
 
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => { setTimeout(resolve, ms); });
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise<void>((resolve) => { setTimeout(resolve, ms); });
+};
 
 export interface RequestOptions {
   params?: QueryParams;
   data?: JsonBody | FormData;
   headers?: Record<string, string>;
-  responseType?: 'json' | 'arraybuffer';
+}
+
+async function fetchRequest<T>(method: string, path: string, options: RequestOptions): Promise<T> {
+  const headers = new Headers(options.headers);
+  headers.set('x-disable-pagination', 'true');
+  headers.set('Authorization', `Bearer ${await getToken()}`);
+  const init: RequestInit = { method, headers };
+  if (options.data !== undefined) {
+    if (options.data instanceof FormData) {
+      headers.delete('Content-Type');
+      init.body = options.data;
+    } else {
+      init.body = JSON.stringify(options.data);
+      if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    }
+  }
+  const response = await fetchData(buildApiUrl(path, options.params), init);
+  if (!response.ok) throw responseError(response, await parseErrorBody(response));
+  return parseResponse<T>(response);
 }
 
 export async function request<T>(method: string, path: string, options: RequestOptions = {}): Promise<T> {
-  const config = { method, url: path, ...options };
   let throttleRetries = 2;
   for (;;) {
     try {
-      return (await getClient().request<T>(config)).data;
+      return await fetchRequest<T>(method, path, options);
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
-      const status = isAxiosError(err) ? err.response?.status : undefined;
+      const fetchError = err instanceof FetchError ? err : undefined;
+      const status = fetchError?.status;
 
       if (status === 401 && token) {
         token = null;
         try {
-          return (await getClient().request<T>(config)).data;
+          return await fetchRequest<T>(method, path, options);
         } catch (retryError) {
           const retryErr = retryError instanceof Error ? retryError : new Error(String(retryError));
           throw apiError(retryErr, `${method} ${path}`);
@@ -152,11 +215,11 @@ export async function request<T>(method: string, path: string, options: RequestO
       }
 
       if (status === 429 && throttleRetries > 0) {
-        const wait = isAxiosError(err) ? retryAfterMs(err.response) ?? 1000 : 1000;
+        const wait = fetchError?.retryAfterMs ?? 1000;
         if (wait > MAX_THROTTLE_WAIT_MS) {
           throw Object.assign(
             new Error(`${method} ${path} was rate limited; retry in ${Math.ceil(wait / 1000)}s`),
-            { status, detail: isAxiosError<TaigaErrorBody>(err) ? err.response?.data : undefined },
+            { status, detail: fetchError?.detail },
           );
         }
         throttleRetries -= 1;

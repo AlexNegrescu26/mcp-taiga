@@ -11,6 +11,7 @@ All notable changes to this project are documented in this file. The format is b
 - Converted all six tool definitions to Standard Schema objects and tightened LLM guidance around project discovery and operation-specific arguments.
 - Raised finite HTTP body limits to cover base64 attachment uploads and made attachment downloads metadata-first; bytes now require `includeContent: true` or `savePath`.
 - Added modern stdio and HTTP protocol negotiation coverage, including schema validation failures.
+- Replaced Axios with native fetch while preserving authentication, bounded retries, timeouts, FormData uploads, and bounded attachment downloads.
 
 ## [1.0.0] - 2026-08-24
 

@@ -1,6 +1,5 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
-import axios from 'axios';
 import { z } from 'zod';
 import { apiBaseUrl, get, del, request } from '../api.js';
 import { isNumericId, resolveProjectId, resolveItem, itemType } from '../taiga.js';
@@ -52,6 +51,12 @@ function detectMimeType(fileName?: string): string {
   }
   return 'application/octet-stream';
 }
+
+const attachmentSizeError = (size: number): Error => {
+  const maxMb = (MAX_ATTACHMENT_BYTES / (1024 * 1024)).toFixed(0);
+  const actualMb = (size / (1024 * 1024)).toFixed(2);
+  return new Error(`Attachment size (${actualMb} MB) exceeds the maximum allowed size of ${maxMb} MB.`);
+};
 
 async function resolveTargetItem(
   type: ItemTypeKey,
@@ -164,9 +169,7 @@ const handler = async ({
         }
 
         if (buffer.length > MAX_ATTACHMENT_BYTES) {
-          const maxMb = (MAX_ATTACHMENT_BYTES / (1024 * 1024)).toFixed(0);
-          const actualMb = (buffer.length / (1024 * 1024)).toFixed(2);
-          throw new Error(`Attachment size (${actualMb} MB) exceeds the maximum allowed size of ${maxMb} MB.`);
+          throw attachmentSizeError(buffer.length);
         }
 
         const targetType: ItemTypeKey = type === 'story' ? 'user_story' : type;
@@ -216,14 +219,49 @@ const handler = async ({
           throw new Error(`Refusing to download attachment from host "${downloadUrl.hostname}": does not match Taiga host "${taigaUrl.hostname}".`);
         }
 
-        const { data } = await axios.get<ArrayBuffer>(downloadUrl.toString(), {
-          responseType: 'arraybuffer',
-          maxRedirects: 0,
-          timeout: 30000,
-          maxContentLength: MAX_ATTACHMENT_BYTES,
-          maxBodyLength: MAX_ATTACHMENT_BYTES,
-        });
-        const buffer = Buffer.from(data);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30_000);
+        let buffer: Buffer;
+        try {
+          const response = await globalThis.fetch(downloadUrl, {
+            redirect: 'error',
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            throw new Error(response.statusText || `Request failed with status code ${response.status}`);
+          }
+          const contentLength = Number(response.headers.get('content-length'));
+          if (Number.isFinite(contentLength) && contentLength > MAX_ATTACHMENT_BYTES) {
+            throw attachmentSizeError(contentLength);
+          }
+          if (response.body !== null) {
+            const reader = response.body.getReader();
+            const chunks: Buffer[] = [];
+            let size = 0;
+            try {
+              for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                size += value.byteLength;
+                if (size > MAX_ATTACHMENT_BYTES) {
+                  await reader.cancel();
+                  throw attachmentSizeError(size);
+                }
+                chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+              }
+            } finally {
+              reader.releaseLock();
+            }
+            buffer = Buffer.concat(chunks, size);
+          } else {
+            buffer = Buffer.from(await response.arrayBuffer());
+            if (buffer.byteLength > MAX_ATTACHMENT_BYTES) {
+              throw attachmentSizeError(buffer.byteLength);
+            }
+          }
+        } finally {
+          clearTimeout(timeout);
+        }
         const detectedMime = detectMimeType(attachment.name || '');
 
         let text: string;

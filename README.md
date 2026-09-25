@@ -603,7 +603,7 @@ Manage wiki pages and page subscriptions within a project.
 - **Metadata Cache**: Project metadata (slug lookups, user memberships, and taxonomy lists for statuses, priorities, severities, and issue types) is cached for 60 seconds (`METADATA_TTL_MS`) via `getMetadata`. Work items, comments, and attachments are never cached.
 - **Timeouts**: HTTP requests enforce a 30-second timeout (`REQUEST_TIMEOUT_MS`).
 - **HTTPS Enforcement**: The server emits a warning to stderr if `TAIGA_API_URL` uses unencrypted HTTP to a non-loopback host.
-- **Restricted Attachment Downloads**: Attachment downloads are restricted strictly to the configured Taiga hostname with no redirects allowed (`maxRedirects: 0`), bounded to a maximum file size of 10 MB (`MAX_ATTACHMENT_BYTES`). The download request does not send the Taiga bearer token to media hosts.
+- **Restricted Attachment Downloads**: Attachment downloads are restricted strictly to the configured Taiga hostname with redirects disabled (`redirect: 'error'`), bounded to a maximum file size of 10 MB (`MAX_ATTACHMENT_BYTES`). The download request does not send the Taiga bearer token to media hosts.
 - **File Overwrite Protection**: Attachment download with `savePath` refuses to overwrite an existing local file.
 - **Single-Target Deletions**: Deletion operations accept exactly one target at a time. Batch operations are create-only (up to 20 items), preventing accidental board-wide deletions.
 
@@ -654,7 +654,7 @@ Context-window economics: every tool definition is paid on every session start. 
 ```text
 src/index.ts            # Entrypoint: createServer() factory, stdio vs HTTP transport selection
 src/http.ts             # Streamable HTTP transport (node:http, stateless, DNS-rebinding protected)
-src/api.ts              # Authenticated axios transport, generic HTTP helpers (get, post, patch, del), token management, retry policy, metadata cache
+src/api.ts              # Authenticated native fetch transport, generic HTTP helpers (get, post, patch, del), token management, retry policy, metadata cache
 src/taiga.ts            # Domain helpers: resolution (projects, items, members, taxonomies, sprints) and optimistic concurrency patch
 src/types.ts            # Taiga payload interfaces, tool definitions, and type contracts
 src/format.ts           # Dense pipe-separated single-line renderers and detail views

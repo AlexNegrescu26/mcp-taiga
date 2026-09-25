@@ -2390,7 +2390,7 @@ try {
     );
     assert.equal(dataReqRecorded, false, 'stub must record no request to data URL after metadata fetch');
 
-    assert.equal(downloadRedirectRes.isError, true, 'download following redirect must fail with isError: true due to maxRedirects: 0');
+    assert.equal(downloadRedirectRes.isError, true, "download following redirect must fail with isError: true due to redirect: 'error'");
     const redirectSourceRequests = requests.filter((r) => r.path === '/media/redirect-source.txt');
     assert.equal(redirectSourceRequests.length, 1, 'stub must record exactly one request to redirect source');
     const redirectTargetRequests = requests.filter((r) => r.path === '/media/redirect-target.txt');
