@@ -1,7 +1,7 @@
 
 export const SERVER_INFO = {
   name: 'mcp-taiga',
-  version: '1.0.0',
+  version: '2.0.0',
 };
 
 export const RESOURCE_URIS = {

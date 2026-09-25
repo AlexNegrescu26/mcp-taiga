@@ -2,6 +2,7 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
 import net from 'node:net';
@@ -11,6 +12,8 @@ import path from 'node:path';
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { MAX_ATTACHMENT_BYTES } from '../src/constants.js';
 const serverPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'index.js');
+const manifestPath = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'package.json');
+const manifest: { version: string } = JSON.parse(await readFile(manifestPath, 'utf8'));
 
 let failed = 0;
 const check = (name: string, fn: () => void): void => {
@@ -124,7 +127,7 @@ try {
   await waitForPort(10_000);
 
   check('startup stderr line reports the HTTP endpoint', () => {
-    assert.match(stderr, /mcp-taiga 1\.0\.0: 6 tools \(http:\/\/127\.0\.0\.1:\d+\/mcp\)/);
+    assert.match(stderr, new RegExp(`mcp-taiga ${manifest.version.replace(/\./gu, '\\.')}: 6 tools \\(http://127\\.0\\.0\\.1:\\d+/mcp\\)`));
   });
 
   const init = await request('/mcp', JSON.stringify({
@@ -146,7 +149,7 @@ try {
     assert.equal(msg.jsonrpc, '2.0');
     assert.equal(msg.id, 1);
     assert.equal(msg.result?.protocolVersion, '2025-11-25');
-    assert.deepEqual(msg.result?.serverInfo, { name: 'mcp-taiga', version: '1.0.0' });
+    assert.deepEqual(msg.result?.serverInfo, { name: 'mcp-taiga', version: manifest.version });
   });
   check('stateless mode sets no Mcp-Session-Id header', () => {
     assert.equal(init.headers['mcp-session-id'], undefined);
