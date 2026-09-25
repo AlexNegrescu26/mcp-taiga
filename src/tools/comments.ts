@@ -1,25 +1,10 @@
 import { z } from 'zod';
 import type { CallToolResult, ItemTypeKey, RegisteredTool, TaigaHistoryEntry, TaigaWikiPage, TaigaWorkItem, ToolAnnotations } from '../types.js';
 import { get, post } from '../api.js';
-import { isNumericId, itemType, patchItem, resolveItem, resolveProjectId } from '../taiga.js';
+import { itemType, patchItem, resolveItem, resolveWikiPage } from '../taiga.js';
 import { commentLine, listing } from '../format.js';
 import { createSuccessResponse, guard } from '../utils.js';
 import { SUCCESS_MESSAGES } from '../constants.js';
-
-async function resolveWikiTarget(
-  identifier: string | number,
-  projectIdentifier?: string | number,
-): Promise<TaigaWikiPage> {
-  const raw = String(identifier).trim();
-  if (isNumericId(raw)) {
-    return get<TaigaWikiPage>(`/wiki/${raw}`);
-  }
-  if (!projectIdentifier) {
-    throw new Error('Project ID or slug is required when resolving a wiki page by slug.');
-  }
-  const project = await resolveProjectId(projectIdentifier);
-  return get<TaigaWikiPage>('/wiki/by_slug', { slug: raw, project });
-}
 
 const inputSchema = z.object({
   op: z.enum(['list', 'add', 'edit', 'delete']).describe('Operation to perform'),
@@ -56,7 +41,7 @@ const handler = async ({ op, type, item, project, text, commentId, includeDelete
       let ref: string;
 
       if (normalizedType === 'wiki') {
-        const target = await resolveWikiTarget(item, project);
+        const target = await resolveWikiPage(item, project);
         targetId = target.id;
         targetVersion = target.version;
         ref = target.slug || `#${target.id}`;

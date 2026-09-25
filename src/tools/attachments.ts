@@ -2,7 +2,7 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { basename, resolve } from 'node:path';
 import { z } from 'zod';
 import { apiBaseUrl, get, del, request } from '../api.js';
-import { isNumericId, resolveProjectId, resolveItem, itemType } from '../taiga.js';
+import { resolveItem, itemType, resolveWikiPage } from '../taiga.js';
 import { createSuccessResponse, guard } from '../utils.js';
 import { attachmentLine, details, listing } from '../format.js';
 import { MAX_ATTACHMENT_BYTES } from '../constants.js';
@@ -64,15 +64,7 @@ async function resolveTargetItem(
   project?: string | number,
 ): Promise<TaigaWorkItem | TaigaWikiPage> {
   if (type === 'wiki') {
-    const raw = String(item).trim();
-    if (isNumericId(raw)) {
-      return get<TaigaWikiPage>(`/wiki/${raw}`);
-    }
-    if (!project) {
-      throw new Error('Project ID or slug is required when resolving a wiki page by slug.');
-    }
-    const projectId = await resolveProjectId(project);
-    return get<TaigaWikiPage>('/wiki/by_slug', { slug: raw, project: projectId });
+    return resolveWikiPage(item, project);
   }
   return resolveItem(type, item, project);
 }

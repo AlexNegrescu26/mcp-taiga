@@ -80,16 +80,6 @@ async function parseResponse<T>(response: Response): Promise<T> {
   }
 }
 
-async function parseErrorBody(response: Response): Promise<TaigaErrorBody | undefined> {
-  const text = await response.text();
-  if (!text) return undefined;
-  try {
-    return JSON.parse(text) as TaigaErrorBody;
-  } catch {
-    return text;
-  }
-}
-
 async function fetchData(url: string, init: RequestInit): Promise<Response> {
   return globalThis.fetch(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
 }
@@ -125,7 +115,7 @@ export async function login(username: string, password: string): Promise<AuthRes
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'normal', username, password }),
     });
-    if (!response.ok) throw responseError(response, await parseErrorBody(response));
+    if (!response.ok) throw responseError(response, await parseResponse<TaigaErrorBody>(response));
     const data = await parseResponse<AuthResponse>(response);
     token = data.auth_token;
     tokenExpiresAt = Date.now() + 12 * 60 * 60 * 1000;
@@ -184,7 +174,7 @@ async function fetchRequest<T>(method: string, path: string, options: RequestOpt
     }
   }
   const response = await fetchData(buildApiUrl(path, options.params), init);
-  if (!response.ok) throw responseError(response, await parseErrorBody(response));
+  if (!response.ok) throw responseError(response, await parseResponse<TaigaErrorBody>(response));
   return parseResponse<T>(response);
 }
 

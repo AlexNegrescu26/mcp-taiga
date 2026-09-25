@@ -12,6 +12,7 @@ import type {
   TaigaRole,
   TaigaTaxonomyItem,
   TaigaUser,
+  TaigaWikiPage,
   TaigaWorkItem,
   TaxonomyKind,
 } from './types.js';
@@ -48,6 +49,18 @@ export async function resolveProjectId(projectIdentifier: string | number): Prom
   if (isNumericId(projectIdentifier)) return Number(projectIdentifier);
   const project = await getMetadata<TaigaProject>(`${API_ENDPOINTS.PROJECTS}/by_slug`, { slug: projectIdentifier });
   return project.id;
+}
+
+export async function resolveWikiPage(page: string | number, project?: string | number): Promise<TaigaWikiPage> {
+  const raw = String(page).trim();
+  if (isNumericId(raw)) {
+    return get<TaigaWikiPage>(`${API_ENDPOINTS.WIKI}/${raw}`);
+  }
+  if (!project) {
+    throw new Error('Project ID or slug is required when resolving a wiki page by slug.');
+  }
+  const projectId = await resolveProjectId(project);
+  return get<TaigaWikiPage>(`${API_ENDPOINTS.WIKI}/by_slug`, { slug: raw, project: projectId });
 }
 
 export async function resolveProject(projectIdentifier: string | number): Promise<TaigaProject> {
@@ -169,34 +182,6 @@ export async function patchItem<T>(
 
 const SPRINT_CLEAR_SENTINELS = new Set(['null', 'none', 'remove']);
 
-async function resolveSprint(
-  projectId: string | number,
-  identifier: string | number,
-): Promise<TaigaMilestone | null> {
-  if (identifier === undefined || identifier === null) {
-    throw new Error('Sprint identifier cannot be empty.');
-  }
-  const raw = String(identifier).trim();
-  if (!raw) {
-    throw new Error('Sprint identifier cannot be empty.');
-  }
-  if (SPRINT_CLEAR_SENTINELS.has(raw.toLowerCase())) {
-    return null;
-  }
-  if (isNumericId(raw)) {
-    return get<TaigaMilestone>(`${API_ENDPOINTS.MILESTONES}/${raw}`);
-  }
-  const project = await resolveProjectId(projectId);
-  const sprints = await get<TaigaMilestone[]>(API_ENDPOINTS.MILESTONES, { project });
-  const wanted = raw.toLowerCase();
-  const match = sprints.find((s) => s.name?.toLowerCase() === wanted);
-  if (!match) {
-    const available = sprints.map((s) => s.name).join(', ');
-    throw new Error(`No sprint named "${identifier}" in this project. Available: ${available || 'none'}`);
-  }
-  return match;
-}
-
 export async function resolveSprintId(
   projectId: string | number,
   identifier: string | number,
@@ -214,8 +199,15 @@ export async function resolveSprintId(
   if (isNumericId(raw)) {
     return Number(raw);
   }
-  const sprint = await resolveSprint(projectId, raw);
-  return sprint ? sprint.id : null;
+  const project = await resolveProjectId(projectId);
+  const sprints = await get<TaigaMilestone[]>(API_ENDPOINTS.MILESTONES, { project });
+  const wanted = raw.toLowerCase();
+  const match = sprints.find((s) => s.name?.toLowerCase() === wanted);
+  if (!match) {
+    const available = sprints.map((s) => s.name).join(', ');
+    throw new Error(`No sprint named "${raw}" in this project. Available: ${available || 'none'}`);
+  }
+  return match.id;
 }
 
 export async function resolvePointsPayload(projectId: number, points: string | number): Promise<Record<string, number>> {

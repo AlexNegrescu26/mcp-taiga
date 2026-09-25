@@ -1,25 +1,10 @@
 import { z } from 'zod';
 import { get, post, del } from '../api.js';
-import { isNumericId, resolveProjectId, patchItem, projectUserNames } from '../taiga.js';
+import { resolveProjectId, patchItem, projectUserNames, resolveWikiPage } from '../taiga.js';
 import { API_ENDPOINTS } from '../constants.js';
 import { createSuccessResponse, guard } from '../utils.js';
 import { day, details, listing, wikiLine } from '../format.js';
 import type { CallToolResult, RegisteredTool, TaigaWikiPage, ToolAnnotations } from '../types.js';
-
-async function resolveWikiPage(page: string | number | undefined | null, project?: string | number): Promise<TaigaWikiPage> {
-  if (page === undefined || page === null || page === '') {
-    throw new Error('Wiki page ID or slug is required.');
-  }
-  const raw = String(page).trim();
-  if (isNumericId(raw)) {
-    return get<TaigaWikiPage>(`${API_ENDPOINTS.WIKI}/${raw}`);
-  }
-  if (!project) {
-    throw new Error('Project ID or slug is required when resolving a wiki page by slug.');
-  }
-  const projectId = await resolveProjectId(project);
-  return get<TaigaWikiPage>(`${API_ENDPOINTS.WIKI}/by_slug`, { slug: raw, project: projectId });
-}
 
 const inputSchema = z.object({
   op: z.enum(['list', 'get', 'create', 'update', 'delete', 'watch']).describe('Operation to perform: list, get, create, update, delete, watch'),
